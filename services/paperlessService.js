@@ -135,18 +135,18 @@ class PaperlessService {
   async createCustomFieldSafely(fieldName, fieldType, default_currency) {
     try {
       // Try to create the field first
-      const response = await this.client.post('/custom_fields/', { 
+      const response = await this.client.post('/custom_fields/', {
         name: fieldName,
         data_type: fieldType,
         extra_data: {
           default_currency: default_currency || null
         }
       });
-      const newField = response.data;
+      const newField = await this.removeOwnerIfPresent('custom_fields', response.data);
       console.log(`[DEBUG] Successfully created custom field "${fieldName}" with ID ${newField.id}`);
       this.customFieldCache.set(fieldName.toLowerCase(), newField);
       return newField;
-    } catch (error) { 
+    } catch (error) {
       if (error.response?.status === 400) {
         await this.refreshCustomFieldCache();
         const existingField = await this.findExistingCustomField(fieldName);
@@ -285,11 +285,11 @@ class PaperlessService {
 
   async createTagSafely(tagName) {
     const normalizedName = tagName.toLowerCase();
-    
+
     try {
       // Versuche zuerst, den Tag zu erstellen
       const response = await this.client.post('/tags/', { name: tagName });
-      const newTag = response.data;
+      const newTag = await this.removeOwnerIfPresent('tags', response.data);
       console.log(`[DEBUG] Successfully created tag "${tagName}" with ID ${newTag.id}`);
       this.tagCache.set(normalizedName, newTag);
       return newTag;
@@ -1051,13 +1051,14 @@ async searchForExistingCorrespondent(correspondent) {
     
         // Create new correspondent only if restrictions are not enabled
         try {
-            const createResponse = await this.client.post('/correspondents/', { 
-                name: name 
+            const createResponse = await this.client.post('/correspondents/', {
+                name: name
             });
-            console.log(`[DEBUG] Created new correspondent "${name}" with ID ${createResponse.data.id}`);
-            return createResponse.data;
+            const correspondent = await this.removeOwnerIfPresent('correspondents', createResponse.data);
+            console.log(`[DEBUG] Created new correspondent "${name}" with ID ${correspondent.id}`);
+            return correspondent;
         } catch (createError) {
-            if (createError.response?.status === 400 && 
+            if (createError.response?.status === 400 &&
                 createError.response?.data?.error?.includes('unique constraint')) {
               
                 // Race condition check - another process might have created it
@@ -1132,16 +1133,17 @@ async getOrCreateDocumentType(name) {
   
       // Erstelle neuen document_type
       try {
-          const createResponse = await this.client.post('/document_types/', { 
+          const createResponse = await this.client.post('/document_types/', {
               name: name,
               matching_algorithm: 1, // 1 = ANY
               match: "",  // Optional: Kann später angepasst werden
               is_insensitive: true
           });
-          console.log(`[DEBUG] Created new document type "${name}" with ID ${createResponse.data.id}`);
-          return createResponse.data;
+          const documentType = await this.removeOwnerIfPresent('document_types', createResponse.data);
+          console.log(`[DEBUG] Created new document type "${name}" with ID ${documentType.id}`);
+          return documentType;
       } catch (createError) {
-          if (createError.response?.status === 400 && 
+          if (createError.response?.status === 400 &&
               createError.response?.data?.error?.includes('unique constraint')) {
             
               // Race condition check
@@ -1236,6 +1238,22 @@ async getOrCreateDocumentType(name) {
         return null;
     }
 }
+
+  async removeOwnerIfPresent(resourcePath, entity) {
+    if (!entity || entity.owner === null || entity.owner === undefined) {
+      return entity;
+    }
+
+    try {
+      const response = await this.client.patch(`/${resourcePath}/${entity.id}/`, { owner: null });
+      const clearedEntity = response.data ?? { ...entity, owner: null };
+      console.log(`[DEBUG] Cleared owner for ${resourcePath} entry ${entity.id}`);
+      return clearedEntity;
+    } catch (error) {
+      console.warn(`[WARN] Could not clear owner for ${resourcePath} entry ${entity.id}:`, error.message);
+      return entity;
+    }
+  }
   //Remove if not needed?
   async getOwnerOfDocument(documentId) {
     this.initialize();
