@@ -74,6 +74,17 @@ Powered by **Retrieval-Augmented Generation (RAG)**, you can now search semantic
 - Persistent volumes and graceful shutdown
 - Works out of the box with minimal setup
 
+### 🔐 Automatic Admin Provisioning
+
+Provide initial admin credentials as environment variables to skip the manual setup step on first boot:
+
+```bash
+PAPERLESS_AI_ADMIN_USERNAME="admin"
+PAPERLESS_AI_ADMIN_PASSWORD="your-strong-password"
+```
+
+When both variables are present and no users exist yet, Paperless-AI automatically creates the admin account during startup so the service is ready without further input.
+
 ---
 
 ## 🔧 Local Development

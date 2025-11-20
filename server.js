@@ -8,6 +8,7 @@ const AIServiceFactory = require('./services/aiServiceFactory');
 const documentModel = require('./models/document');
 const setupService = require('./services/setupService');
 const setupRoutes = require('./routes/setup');
+const bcrypt = require('bcryptjs');
 
 // Add environment variables for RAG service if not already set
 process.env.RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'http://localhost:8000';
@@ -154,6 +155,33 @@ async function initializeDataDirectory() {
   } catch {
     console.log('Creating data directory...');
     await fs.mkdir(dataDir, { recursive: true });
+  }
+}
+
+// Bootstrap admin user from environment variables if provided
+async function ensureInitialAdminUser() {
+  try {
+    const users = await documentModel.getUsers();
+    if (users.length > 0) {
+      return;
+    }
+
+    const adminUsername = process.env.PAPERLESS_AI_ADMIN_USERNAME;
+    const adminPassword = process.env.PAPERLESS_AI_ADMIN_PASSWORD;
+
+    if (!adminUsername || !adminPassword) {
+      console.log('[INFO] No initial admin credentials supplied via environment variables.');
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(adminPassword, 15);
+    const created = await documentModel.addUser(adminUsername, hashedPassword);
+
+    if (created) {
+      console.log(`[INFO] Initial admin user "${adminUsername}" created from environment variables.`);
+    }
+  } catch (error) {
+    console.error('[ERROR] Failed to create initial admin user from environment variables:', error);
   }
 }
 
@@ -629,6 +657,7 @@ async function startServer() {
   const port = process.env.PAPERLESS_AI_PORT || 3000;
   try {
     await initializeDataDirectory();
+    await ensureInitialAdminUser();
     await saveOpenApiSpec(); // Save OpenAPI specification on startup
     app.listen(port, () => {
       console.log(`Server running on port ${port}`);
