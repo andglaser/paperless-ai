@@ -1052,7 +1052,10 @@ async searchForExistingCorrespondent(correspondent) {
         // Create new correspondent only if restrictions are not enabled
         try {
             const createResponse = await this.client.post('/correspondents/', {
-                name: name
+                name: name,
+                matching_algorithm: 0, // 0 = No automatic assignment
+                match: "",
+                is_insensitive: true
             });
             const correspondent = await this.removeOwnerIfPresent('correspondents', createResponse.data);
             console.log(`[DEBUG] Created new correspondent "${name}" with ID ${correspondent.id}`);
@@ -1135,7 +1138,7 @@ async getOrCreateDocumentType(name) {
       try {
           const createResponse = await this.client.post('/document_types/', {
               name: name,
-              matching_algorithm: 1, // 1 = ANY
+              matching_algorithm: 0, // 0 = No automatic assignment
               match: "",  // Optional: Kann später angepasst werden
               is_insensitive: true
           });
